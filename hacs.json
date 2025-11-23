@@ -1,0 +1,7 @@
+{
+  "name": "UniFi simplified device tracking",
+  "content_in_root": false,
+  "domains": ["unifi_aggregate_presence"],
+  "homeassistant": "2025.0",
+  "render_readme": true
+}
