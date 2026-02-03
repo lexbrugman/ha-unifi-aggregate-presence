@@ -73,7 +73,7 @@ class UnifiAggregateEntity(CoordinatorEntity, TrackerEntity):
         return None
 
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
         return {
             "online_device_count": self._online_host_count(),
             "seconds_since_last_seen": round(self._seconds_since_last_seen()),
