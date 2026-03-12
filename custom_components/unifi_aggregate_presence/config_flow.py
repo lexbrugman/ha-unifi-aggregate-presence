@@ -30,7 +30,7 @@ class FlowHandler(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry) -> "OptionsFlowHandler":
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         if self._async_current_entries():
@@ -80,9 +80,6 @@ def _build_data_schema(
 
 
 class OptionsFlowHandler(OptionsFlow):
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self.config_entry = config_entry
-
     async def async_step_init(self, user_input=None) -> FlowResult:
         if user_input is not None:
             data = dict(user_input)
