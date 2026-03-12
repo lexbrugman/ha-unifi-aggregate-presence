@@ -1,6 +1,6 @@
 import datetime
 import logging
-import voluptuous as vol
+import re
 from syncasync import sync_to_async
 from netaddr import (
     IPAddress,
@@ -9,16 +9,12 @@ from netaddr import (
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.core_config import Config
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
 from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER
 from homeassistant.const import (
-    DEVICE_DEFAULT_NAME,
-    CONF_NAME,
     CONF_HOST,
     CONF_USERNAME,
     CONF_PASSWORD,
@@ -27,55 +23,50 @@ from homeassistant.const import (
 
 from .const import (
     DOMAIN,
-    CONFIG,
     ENTRIES,
     CONF_SITE_ID,
     CONF_HOME_SUBNET,
     CONF_FIXED_HOSTS,
-    DEFAULT_SCAN_INTERVAL,
 )
 from .unifi import UnifiClient
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Optional(CONF_NAME, default=DEVICE_DEFAULT_NAME): cv.string,
-                vol.Required(CONF_HOST): cv.string,
-                vol.Required(CONF_USERNAME): cv.string,
-                vol.Required(CONF_PASSWORD): cv.string,
-                vol.Required(CONF_SITE_ID): cv.string,
-                vol.Required(CONF_HOME_SUBNET): cv.string,
-                vol.Optional(CONF_FIXED_HOSTS, default=[]): cv.ensure_list,
-                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): cv.positive_int,
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
-)
 DEVICE_TRACKERS = [DEVICE_TRACKER]
 
 
-async def async_setup(hass: HomeAssistant, config: Config) -> bool:
+async def async_setup(hass: HomeAssistant, _config) -> bool:
     hass.data[DOMAIN] = {
         ENTRIES: {},
-        CONFIG: config[DOMAIN],
     }
+
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    config_data = hass.data[DOMAIN][CONFIG]
+    config_data = {**entry.data, **entry.options}
 
     hostname = config_data.get(CONF_HOST)
     username = config_data.get(CONF_USERNAME)
     password = config_data.get(CONF_PASSWORD)
     site_id = config_data.get(CONF_SITE_ID)
     home_subnet = config_data.get(CONF_HOME_SUBNET)
-    fixed_hosts = [h.lower() for h in config_data.get(CONF_FIXED_HOSTS)]
-    scan_interval = config_data.get(CONF_SCAN_INTERVAL)
+    fixed_hosts = set()
+    fixed_host_regexes = []
+    for host_pattern in config_data.get(CONF_FIXED_HOSTS, []):
+        pattern = str(host_pattern)
+
+        if pattern.startswith("re:"):
+            regex_pattern = pattern[3:]
+            try:
+                fixed_host_regexes.append(re.compile(regex_pattern, re.IGNORECASE))
+            except re.error as err:
+                _LOGGER.warning("Invalid fixed_hosts regex '%s': %s", pattern, err)
+            continue
+
+        fixed_hosts.add(pattern.lower())
+
+    scan_interval = config_data[CONF_SCAN_INTERVAL]
 
     unifi_client = await _async_get_unifi_client(
         hostname,
@@ -101,7 +92,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 continue
 
             client_hostname = wireless_client.get("name", wireless_client.get("hostname", ""))
-            if not client_hostname or client_hostname.lower() in fixed_hosts:
+            if not client_hostname:
+                continue
+
+            if client_hostname.lower() in fixed_hosts:
+                continue
+
+            if any(pattern.fullmatch(client_hostname) for pattern in fixed_host_regexes):
                 continue
 
             online_hosts.append(client_hostname)
@@ -118,13 +115,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_refresh()
 
     hass.data[DOMAIN][ENTRIES][entry.entry_id] = coordinator
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+
     await hass.config_entries.async_forward_entry_setups(entry, DEVICE_TRACKERS)
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
-    unload.ok = await hass.config_entries.async_unload_platforms(entry, DEVICE_TRACKERS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, DEVICE_TRACKERS)
 
     if unload_ok:
         hass.data[DOMAIN][ENTRIES].pop(entry.entry_id)
