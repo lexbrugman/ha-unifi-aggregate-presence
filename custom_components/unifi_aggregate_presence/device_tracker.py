@@ -18,7 +18,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     AWAY_GRACE_TIME,
     DOMAIN,
-    CONFIG,
     ENTRIES,
 )
 
@@ -27,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     coordinator = hass.data[DOMAIN][ENTRIES][entry.entry_id]
-    config_data = hass.data[DOMAIN][CONFIG]
+    config_data = entry.data
     async_add_entities([UnifiAggregateEntity(
         coordinator,
         config_data,
