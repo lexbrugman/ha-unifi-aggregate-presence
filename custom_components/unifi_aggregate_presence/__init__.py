@@ -44,7 +44,7 @@ async def async_setup(hass: HomeAssistant, _config) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    config_data = entry.data
+    config_data = {**entry.data, **entry.options}
 
     hostname = config_data.get(CONF_HOST)
     username = config_data.get(CONF_USERNAME)
@@ -115,6 +115,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_refresh()
 
     hass.data[DOMAIN][ENTRIES][entry.entry_id] = coordinator
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+
     await hass.config_entries.async_forward_entry_setups(entry, DEVICE_TRACKERS)
 
     return True
