@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "UniFi simplified device tracking",
+        "description": "Set up UniFi aggregate presence tracking.",
+        "data": {
+          "name": "Name",
+          "host": "Controller host",
+          "username": "Username",
+          "password": "Password",
+          "site_id": "Site ID",
+          "home_subnet": "Home subnet (CIDR)",
+          "fixed_hosts": "Fixed hosts (one per line; use re: for regex)",
+          "scan_interval": "Scan interval (seconds)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only a single configuration is allowed."
+    }
+  }
+}
