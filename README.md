@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="logo.svg" width="150" height="150" />
+</div>
+
 # UniFi simplified device tracking
 
 Simplified tracking for UniFi clients, combining them into a single entity. The approach is blacklisting fixed/stationary devices, anything else will be used for presence detection.
