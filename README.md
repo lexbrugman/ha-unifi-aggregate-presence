@@ -12,7 +12,9 @@ This integration uses Home Assistant UI configuration (Config Entries).
 
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Select **UniFi simplified device tracking**.
-3. Fill in controller host, credentials, site id, home subnet, fixed hosts, and scan interval.
+3. Fill in controller host, API key, site id, home subnet, fixed hosts, and scan interval.
+
+The API key can be generated in the UniFi OS console under **Integrations → Create New API Key**.
 
 ### Fixed hosts
 

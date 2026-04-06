@@ -1,7 +1,6 @@
 import datetime
 import logging
 import re
-from syncasync import sync_to_async
 from netaddr import (
     IPAddress,
     IPNetwork,
@@ -9,6 +8,7 @@ from netaddr import (
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -16,14 +16,12 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.components.device_tracker import DOMAIN as DEVICE_TRACKER
 from homeassistant.const import (
     CONF_HOST,
-    CONF_USERNAME,
-    CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
 )
 
 from .const import (
     DOMAIN,
-    ENTRIES,
+    CONF_API_KEY,
     CONF_SITE_ID,
     CONF_HOME_SUBNET,
     CONF_FIXED_HOSTS,
@@ -35,20 +33,11 @@ _LOGGER = logging.getLogger(__name__)
 DEVICE_TRACKERS = [DEVICE_TRACKER]
 
 
-async def async_setup(hass: HomeAssistant, _config) -> bool:
-    hass.data[DOMAIN] = {
-        ENTRIES: {},
-    }
-
-    return True
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     config_data = {**entry.data, **entry.options}
 
     hostname = config_data.get(CONF_HOST)
-    username = config_data.get(CONF_USERNAME)
-    password = config_data.get(CONF_PASSWORD)
+    api_key = config_data.get(CONF_API_KEY)
     site_id = config_data.get(CONF_SITE_ID)
     home_subnet = config_data.get(CONF_HOME_SUBNET)
     fixed_hosts = set()
@@ -68,21 +57,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     scan_interval = config_data[CONF_SCAN_INTERVAL]
 
-    unifi_client = await _async_get_unifi_client(
-        hostname,
-        username,
-        password,
-        port=443,
-        version="v5",
-        site_id=site_id,
-    )
+    unifi_client = UnifiClient(async_get_clientsession(hass), hostname, api_key, site_id)
 
-    @sync_to_async
-    def _async_update_data():
+    async def _async_update_data():
         online_hosts = []
 
         try:
-            wireless_clients = unifi_client.get_wireless_clients()
+            wireless_clients = await unifi_client.get_wireless_clients()
         except Exception as err:
             raise UpdateFailed(f"Error communicating with UniFi controller: {err}")
 
@@ -114,7 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await coordinator.async_refresh()
 
-    hass.data[DOMAIN][ENTRIES][entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, DEVICE_TRACKERS)
@@ -123,18 +104,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, DEVICE_TRACKERS)
-
-    if unload_ok:
-        hass.data[DOMAIN][ENTRIES].pop(entry.entry_id)
-
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, DEVICE_TRACKERS)
 
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-@sync_to_async
-def _async_get_unifi_client(*args, **kwargs):
-    return UnifiClient(*args, **kwargs)

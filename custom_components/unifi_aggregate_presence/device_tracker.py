@@ -1,4 +1,3 @@
-import logging
 from time import time
 
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
@@ -15,18 +14,12 @@ from homeassistant.core import (
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    AWAY_GRACE_TIME,
-    DOMAIN,
-    ENTRIES,
-)
-
-_LOGGER = logging.getLogger(__name__)
+from .const import AWAY_GRACE_TIME
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    coordinator = hass.data[DOMAIN][ENTRIES][entry.entry_id]
-    config_data = entry.data
+    coordinator = entry.runtime_data
+    config_data = {**entry.data, **entry.options}
     async_add_entities([UnifiAggregateEntity(
         coordinator,
         config_data,
@@ -35,10 +28,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 class UnifiAggregateEntity(CoordinatorEntity, TrackerEntity):
     def __init__(self, coordinator, config_data: dict):
-        super(UnifiAggregateEntity, self).__init__(coordinator)
+        super().__init__(coordinator)
 
         self._config_data = config_data
-        self._last_seen_time = 0.0
+        self._last_seen_time = time() if coordinator.data else 0.0
 
     @property
     def unique_id(self):
